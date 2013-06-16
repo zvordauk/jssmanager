@@ -6,7 +6,7 @@
 
 #	The latest version of this script can be found at https://github.com/jkitzmiller/jssmanager
 
-#	Version 8.7b1 - 6/10/2013
+#	Version 8.7b2 - 6/15/2013
 
 #	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 8.7
 
@@ -23,6 +23,19 @@
 	
 	dbHost="localhost"
 	
+	# MySQL root user
+	
+	dbRoot="root"
+	
+	# MySQL root password
+	# Leave this blank to have the script prompt each time
+	
+	mysqlRootPwd=""
+	
+	# Path to dump MySQL database (do not leave a trailing / at the end of your path)
+	
+	dbDump="/tmp"
+	
 	# Path where you store your JSS logs (do not leave a trailing / at the end of your path)
 	
 	logPath="/var/log/JSS"
@@ -31,9 +44,11 @@
 	
 	webapp="/usr/local/jssmanager/ROOT.war"
 	
-	# Path to dump MySQL database (do not leave a trailing / at the end of your path)
+	# Ethernet interface for the local IP of the server
+	# This is the IP the server uses to connect to the database host
+	# In most setups, this won't have to be changed
 	
-	dbDump="/tmp"
+	eth="eth0"
 	
 ########### It is not recommended that you make any changes after this line ##############
 
@@ -53,71 +68,72 @@ function yesNo()
 		 	[yY] | [yY][Ee][Ss] )
                 yesNo="yes";;
 
-       		[nN] | [n|N][O|o] )
+       		[nN] | [nN][Oo] )
                 yesNo="no";;
                 
     		*) echo "Invalid input";;
 		esac
 }	
 
-# The deleteMenu function prompts the user for the name of the instance they want to delete
+# The deleteMenu function prompts the user for the name of the context they want to delete
 
 function deleteMenu()
 {
-	echo "Please enter the name of the instance you would like to delete."
+	echo "Please enter the name of the context you would like to delete."
 	echo
-	read -p "Instance Name: " instanceName
+	read -p "Context Name: " contextName
 	
-	if [ ! -d "$tomcatPath/webapps/$instanceName" ];
+	if [ ! -d "$tomcatPath/webapps/$contextName" ];
 		then
-			echo "$instanceName is not a valid JSS instance."
+			echo "$contextName is not a valid JSS context."
+			sleep 3
 		else
-			echo "$instanceName will be deleted."
+			echo "$contextName will be deleted."
 			echo "Would you like to continue?"
 			yesNo
 			
 			if [ $yesNo == "yes" ];
 				then
-					echo "Deleting $instanceName..."
+					echo "Deleting $contextName..."
 					deleteWebapp
 				else
-					echo "$instanceName will not be deleted."
+					echo "$contextName will not be deleted."
 			fi
 	fi
+	mainMenu
 }
 
-# The deleteWebapp function deletes the JSS webapp for the specified instance.
+# The deleteWebapp function deletes the JSS webapp for the specified context.
 
 function deleteWebapp()
 {
-	echo "Deleting $tomcatPath/webapps/$instanceName.war"
-	rm -rf $tomcatPath/webapps/$instanceName.war
-	echo "Deleting $tomcatPath/webapps/$instanceName"
-	rm -rf $tomcatPath/webapps/$instanceName
+	echo "Deleting $tomcatPath/webapps/$contextName.war"
+	rm -rf $tomcatPath/webapps/$contextName.war
+	echo "Deleting $tomcatPath/webapps/$contextName"
+	rm -rf $tomcatPath/webapps/$contextName
 }
 
-# The pullDatabaseSettings function reads the DataBase.xml file for the specified instance
+# The readDatabaseSettings function reads the DataBase.xml file for the specified context
 # and reads the Database host, name, user and password settings. This is used when upgading
-# existing JSS instances.
+# existing JSS contexts.
 
-function pullDatabaseSettings()
+function readDatabaseSettings()
 {
-	dbHost=$(sed -n 's|<ServerName>\(.*\)</ServerName>|\1|p' $tomcatPath/webapps/$instanceName/WEB-INF/xml/DataBase.xml)
-	dbName=$(sed -n 's|<DataBaseName>\(.*\)</DataBaseName>|\1|p' $tomcatPath/webapps/$instanceName/WEB-INF/xml/DataBase.xml)
-	dbUser=$(sed -n 's|<DataBaseUser>\(.*\)</DataBaseUser>|\1|p' $tomcatPath/webapps/$instanceName/WEB-INF/xml/DataBase.xml)
-	dbPass=$(sed -n 's|<DataBasePassword>\(.*\)</DataBasePassword>|\1|p' $tomcatPath/webapps/$instanceName/WEB-INF/xml/DataBase.xml)
+	echo "Reading database connection settings..."
+	
+	dbHost=$(sed -n 's|<ServerName>\(.*\)</ServerName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbName=$(sed -n 's|<DataBaseName>\(.*\)</DataBaseName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbUser=$(sed -n 's|<DataBaseUser>\(.*\)</DataBaseUser>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbPass=$(sed -n 's|<DataBasePassword>\(.*\)</DataBasePassword>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
 }
 
 # The touchLogFiles function first checks for the existance of the directory specified
 # in logPath, and gives the option to create or specify a new path if it doesn't exist.
-# It then checks for the existance of unique log files for the instance, and creates
+# It then checks for the existance of unique log files for the context, and creates
 # them if none are found.
 
 function touchLogFiles()
 {
-	# Check to make sure directory specified in logPath exists, gives the opton to create
-	# or specify a new logPath if it does not exist.
-	
 	until [ -d "$logPath" ];
 		do
 			echo "$logPath does not exist!"
@@ -138,48 +154,48 @@ function touchLogFiles()
 			fi
 		done
 	
-	if [ ! -d "$logPath/$instanceName" ];
+	if [ ! -d "$logPath/$contextName" ];
 		then
-			echo Creating $logPath/$instanceName/
-			mkdir $logPath/$instanceName
-			chown tomcat7:tomcat7 $logPath/$instanceName
+			echo Creating $logPath/$contextName/
+			mkdir $logPath/$contextName
+			chown tomcat7:tomcat7 $logPath/$contextName
 		else
-			echo $logPath/$instanceName/ exists
+			echo $logPath/$contextName/ exists
 	fi
 	
-	if [ ! -f "$logPath/$instanceName/JAMFSoftwareServer.log" ];
+	if [ ! -f "$logPath/$contextName/JAMFSoftwareServer.log" ];
 		then
-			echo Creating $logPath/$instanceName/JAMFSoftwareServer.log
-			touch $logPath/$instanceName/JAMFSoftwareServer.log
-			chown tomcat7:tomcat7 $logPath/$instanceName/JAMFSoftwareServer.log
+			echo Creating $logPath/$contextName/JAMFSoftwareServer.log
+			touch $logPath/$contextName/JAMFSoftwareServer.log
+			chown tomcat7:tomcat7 $logPath/$contextName/JAMFSoftwareServer.log
 		else
-			echo $logPath/$instanceName/JAMFSoftwareServer.log exists
+			echo $logPath/$contextName/JAMFSoftwareServer.log exists
 	fi
 	
-	if [ ! -f "$logPath/$instanceName/jamfChangeManagement.log" ];
+	if [ ! -f "$logPath/$contextName/jamfChangeManagement.log" ];
 		then
-			echo Creating $logPath/$instanceName/jamfChangeManagement.log
-			touch $logPath/$instanceName/jamfChangeManagement.log
-			chown tomcat7:tomcat7 $logPath/$instanceName/jamfChangeManagement.log
+			echo Creating $logPath/$contextName/jamfChangeManagement.log
+			touch $logPath/$contextName/jamfChangeManagement.log
+			chown tomcat7:tomcat7 $logPath/$contextName/jamfChangeManagement.log
 		else
-			echo $logPath/$instanceName/jamfChangeManagement.log exists
+			echo $logPath/$contextName/jamfChangeManagement.log exists
 	fi
 }
 
-# The deployWebapp function deploys the JSS webapp using the specified instance name
+# The deployWebapp function deploys the JSS webapp using the specified context name
 # and database connection settings.
 
 function deployWebapp()
 {
 	echo Deploying Tomcat webapp
-	cp $webapp $tomcatPath/webapps/$instanceName.war
+	cp $webapp $tomcatPath/webapps/$contextName.war
 	
 	# Sleep timer to allow tomcat app to deploy
 
 	counter=0
 	while [ $counter -lt 12 ];
 		do
-			if [ ! -d "$tomcatPath/webapps/$instanceName" ];
+			if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
 				then
 					echo "Waiting for Tomcat webapp to deploy..."
 					sleep 5
@@ -189,7 +205,7 @@ function deployWebapp()
 			fi
 	done
 	
-	if [ ! -d "$tomcatPath/webapps/$instanceName" ];
+	if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
 		then
 			echo Something is wrong...
 			echo Tomcat webapp has not deployed.
@@ -203,42 +219,63 @@ function deployWebapp()
 	# Change log4j files to point logs to new log locations
 
 	echo Updating log4j files
-	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$instanceName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$instanceName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$instanceName/WEB-INF/classes/log4j.JAMFCMFILE.properties
-	sed "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$instanceName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$instanceName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties
-	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$instanceName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$instanceName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$instanceName/WEB-INF/classes/log4j.properties
+	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties
+	sed "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties
+	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties
 
-	# Add database connection info to JSS instance
+	# Add database connection info to JSS context
 
 	echo Writing database connection settings
-	sed -e "s@<ServerName>.*@<ServerName>$dbHost</ServerName>@" -e "s@<DataBaseName>.*@<DataBaseName>$dbName</DataBaseName>@" -e "s@<DataBaseUser>.*@<DataBaseUser>$dbUser</DataBaseUser>@" -e "s@<DataBasePassword>.*@<DataBasePassword>$dbPass</DataBasePassword>@" -i $tomcatPath/webapps/$instanceName/WEB-INF/xml/DataBase.xml
+	sed -e "s@<ServerName>.*@<ServerName>$dbHost</ServerName>@" -e "s@<DataBaseName>.*@<DataBaseName>$dbName</DataBaseName>@" -e "s@<DataBaseUser>.*@<DataBaseUser>$dbUser</DataBaseUser>@" -e "s@<DataBasePassword>.*@<DataBasePassword>$dbPass</DataBasePassword>@" -i $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml
 }
 
 function updateWebapp()
 {
-	echo "Please enter the name of the instance you would like to update."
+	echo "Please enter the name of the context you would like to update."
 	echo
-	read -p "Instance Name: " instanceName
+	read -p "Context Name: " contextName
 	
-	if [ ! -d "$tomcatPath/webapps/$instanceName" ];
+	if [ ! -d "$tomcatPath/webapps/$contextName" ];
 		then
-			echo "$instanceName is not a valid JSS instance."
+			echo "$contextName is not a valid JSS context."
+			sleep 3
 		else
-			echo "$instanceName will be updated."
+			echo "$contextName will be updated."
 			echo "Would you like to continue?"
 			yesNo
 			
 			if [ $yesNo == "yes" ];
 				then
-					echo "Updating $instanceName..."
-						pullDatabaseSettings
+					echo "Updating $contextName..."
+						readDatabaseSettings
+						testDatabase
 		   				touchLogFiles
 		   				deleteWebapp
 		   				deployWebapp
 		   				bounceTomcat
 				else
-					echo "$instanceName will not be updated."
+					echo "$contextName will not be updated."
 			fi
 	fi
+	mainMenu
+}
+
+
+
+function tomcatRestartPrompt()
+{
+	echo
+	echo "A Tomcat restart is recommended."
+	echo "Would you like to restart Tomcat now?"
+	yesNo
+	if [ $yesNo == "yes" ];
+		then
+   			bounceTomcat
+   	elif [ $yesNo == "no" ];
+   		then
+   			echo "Tomcat will not be restarted."
+   	fi
+   	mainMenu
 }
 
 # The bounceTomcat function checks to see if Tomcat was installed as part of the JSS
@@ -246,6 +283,8 @@ function updateWebapp()
 
 function bounceTomcat()
 {
+	echo "Restarting Tomcat..."
+	
 	if [ -d "/var/lib/tomcat7" ];
 		then
 			service tomcat7 restart
@@ -255,28 +294,30 @@ function bounceTomcat()
 	fi
 }
 
-# Get JSS instance name and database connection information from user
+# The newcontext function gets the context name and database connection information
+# from the user, and deploys a new context. If the user enters an context name
+# that is already in use, the script will prompt to upgrade the context instead.
 
-function newInstance()
+function newcontext()
 {
 	echo
-	echo "Please enter a name for this instance."
+	echo "Please enter a name for this context."
 	echo
-	read -p "Instance Name: " instanceName
+	read -p "Context Name: " contextName
 	
-	if [ -d "$tomcatPath/webapps/$instanceName" ];
+	if [ -d "$tomcatPath/webapps/$contextName" ];
 		then
-			echo "$instanceName already exists!"
-			echo "Would you like to upgrade this instance?"
+			echo "$contextName already exists!"
+			echo "Would you like to upgrade this context?"
 			yesNo
 				if [ $yesNo == "yes" ];
 					then
-						echo "Updating $instanceName..."
-							pullDatabaseSettings
+						echo "Updating $contextName..."
+							readDatabaseSettings
 		   					touchLogFiles
 		   					deleteWebapp
 		   					deployWebapp
-		   					bounceTomcat
+		   					tomcatRestartPrompt
 		   		elif [ $yesNo == "no" ];
 		   			then
 		   				echo "Aborting deployment."
@@ -302,9 +343,9 @@ function newInstance()
 					read -p "Database Server: " dbHost
 			fi
 			
-			echo "A new instance will be deployed with the following settings."
+			echo "A new context will be deployed with the following settings."
 			echo
-			echo "Instance Name: $instanceName"
+			echo "Context Name: $contextName"
 			echo "Database Name: $dbName"
 			echo "Database User: $dbUser"
 			echo "Database Pass: $dbPass"
@@ -315,27 +356,107 @@ function newInstance()
 				
 			if [ $yesNo == "yes" ];
 				then
+					testDatabase
 					touchLogFiles
-		   			deleteWebapp
 					deployWebapp
-   					bounceTomcat
+					tomcatRestartPrompt
    			elif [ $yesNo == "no" ];
    				then
-   					echo "Instance will not be created."
+   					echo "Context will not be created."
+   					sleep 3
+   					mainMenu
    			fi
 	fi
 }
-			
-##########################################################################################
-#################################### End functions #######################################
-##########################################################################################
 
-	clear
+# The mysqlConfig function pulls the server IP address (or just localhost, if the database
+# server is localhost), prompts the user for the root password (if not stored in the script)
+# tests the root password for a proper login, and prompts the user to re-enter the password
+# if incorrect.
+
+function mysqlConfig()
+{
+	if [ $dbHost == "localhost" ];
+		then
+			serverAddress="localhost"
+		else
+			serverAddress=`ifconfig $eth | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'`
+	fi
+
+	if [ $mysqlRootPwd == "" ];
+		then
+			read -s -p "MySQL root password:" mysqlRootPwd
+	fi
 	
-	echo "JSS Manager v8.7b1"
+	echo "Testing MySQL root username and password..."
+	# The following could potentially cause an infinite loop if a successful connection
+	# to the database host can not be established
+	until mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd  -e ";" ;
+		do
+			echo "Invalid MySQL root username or password. Please retry."
+			read -p "MySQL Root User: " dbRoot
+			read -s -p "MySQL Root Password: " mysqlRootPwd
+		done
+}
+
+# The createDatabase function creates a database on the host server
+
+function createDatabase()
+{
+	echo "Creating database $dbName..."
+	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd CREATE DATABASE $dbName;
+}
+
+# The grantPermissions function grants permission to a user for the specified database
+
+function grantPermissions()
+{
+	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
+	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd GRANT ALL ON $dbName.* TO $dbName@$serverAddress IDENTIFIED BY '$dbPass';
+}
+
+# The testDatabase function will first test for the existence of the database using the
+# root credentials, then checks to see if the specified user has permission to access the
+# database, offering to create the database and grant permissions as needed.
+
+function testDatabase()
+{
+	echo "Checking database connection settings..."
+	until [[ ! -z "`mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
+		do
+			echo "Database $dbName does not seem to exist."
+			echo "Would you like to create it?"
+			yesNo
+			if [ yesNo == "yes" ];
+				then
+					createDatabase
+			elif [ yesNo == "no" ];
+				then
+					echo "Database will not be created."
+					mainMenu
+			fi
+		done
 	
+	until [[ ! -z "`mysql -h $dbHost -u $dbuser -p$dbPass -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
+		do
+			echo "User $dbUser does not seem to have permission to access database $dbName."
+			echo "Would you like to grant permissions?"
+			yesNo
+			if [ yesNo == "yes" ];
+				then
+					grantPermissions
+			elif [ yesNo == "no" ];
+				then
+					echo "User will not be granted permission."
+					mainMenu
+			fi
+		done
+}
+
 # Check to make sure script is being run as root
 
+function checkRoot()
+{
 	echo "Checking to see if logged in as root..."
 	
 	currentUser=$(whoami)
@@ -350,8 +471,12 @@ function newInstance()
 		else
 			echo "Congratulations! You followed the directions and ran the script as root!"
 	fi
+}
 
 # Check to make sure ROOT.war exists at the specified path
+
+function checkWebapp()
+{
 
 	echo "Checking for $webapp..."
 	
@@ -365,9 +490,12 @@ function newInstance()
 		else
 			echo "Webapp found at $webapp."
 	fi
-	
+}
+
 # Check Tomcat installation method and set appropriate Tomcat path
 
+function checkTomcat()
+{
 	echo "Checking Tomcat installation type..."
 	
 	if [ -d "/var/lib/tomcat7" ];
@@ -376,25 +504,32 @@ function newInstance()
 	elif [ -d "/usr/local/jss/tomcat" ];
 		then
 			tomcatPath="/usr/local/jss/tomcat"
+	else
+		echo "Tomcat7 does not appear to be installed."
+		echo "Please install Tomcat7 before using this script." 
+		echo "Exiting..."
+		sleep 3
+		exit 1
 	fi
 	
 	echo "Tomcat path is $tomcatPath"
+}
 
 # Main menu
 
-	while true
-		do
+function mainMenu()
+{
 			echo
 			echo
 			echo "Welcome to the JSS Manager!"
 			echo
 			echo "What would you like to do?"
 			echo
-			echo "1 Deploy a new JSS instance"
-			echo "2 Upgrade an existing JSS instance"
-			echo "3 Delete an existing JSS instance"
-			echo "4 Exit"
-			echo
+			echo "1 Deploy a new JSS context"
+			echo "2 Upgrade an existing JSS context"
+			echo "3 Delete an existing JSS context"
+			echo "4 Restart Tomcat"
+			echo "5 Exit"
 			echo
 
 			installType=""
@@ -402,14 +537,36 @@ function newInstance()
 			read -p "Enter your choice: " installType
 			case $installType in
 		   		1)    echo Deploying a new JSS...;
-		   				newInstance;;
+		   				newcontext;;
+		   				
 		   		2)    echo Upgrading an existing JSS...;
 		   				updateWebapp;;
+		   				
 		   		3)    echo Deleting an existing JSS...;
 		   				deleteMenu;;
-		   		4)	  echo Exiting...;
+		   				
+		   		4)	  bounceTomcat;;
+		   		
+		   		5)	  echo Exiting...;
 		   				sleep 3;
 		   		 		exit 0;;
+		   		 		
 				*)    echo Invalid Selection!;;
 			esac
-		done
+}
+			
+##########################################################################################
+#################################### End functions #######################################
+##########################################################################################
+
+	clear
+	
+	echo "JSS Manager v8.7b2"
+	
+	checkRoot
+
+	checkWebapp
+	
+	checkTomcat
+	
+	mainMenu
