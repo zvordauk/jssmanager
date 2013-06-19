@@ -6,7 +6,7 @@
 
 #	The latest version of this script can be found at https://github.com/jkitzmiller/jssmanager
 
-#	Version 8.7b2 - 6/15/2013
+#	Version 8.7b3 - 6/18/2013
 
 #	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 8.7
 
@@ -195,7 +195,7 @@ function deployWebapp()
 	counter=0
 	while [ $counter -lt 12 ];
 		do
-			if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
+			if [[ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ]];
 				then
 					echo "Waiting for Tomcat webapp to deploy..."
 					sleep 5
@@ -205,7 +205,7 @@ function deployWebapp()
 			fi
 	done
 	
-	if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
+	if [[ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ]];
 		then
 			echo Something is wrong...
 			echo Tomcat webapp has not deployed.
@@ -229,6 +229,8 @@ function deployWebapp()
 	sed -e "s@<ServerName>.*@<ServerName>$dbHost</ServerName>@" -e "s@<DataBaseName>.*@<DataBaseName>$dbName</DataBaseName>@" -e "s@<DataBaseUser>.*@<DataBaseUser>$dbUser</DataBaseUser>@" -e "s@<DataBasePassword>.*@<DataBasePassword>$dbPass</DataBasePassword>@" -i $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml
 }
 
+# The updateWebapp function asks the user for the name of the context, validates it, then
+# uses the readDatabaseSettings function to 
 function updateWebapp()
 {
 	echo "Please enter the name of the context you would like to update."
@@ -252,7 +254,7 @@ function updateWebapp()
 		   				touchLogFiles
 		   				deleteWebapp
 		   				deployWebapp
-		   				bounceTomcat
+		   				tomcatRestartPrompt
 				else
 					echo "$contextName will not be updated."
 			fi
@@ -275,7 +277,6 @@ function tomcatRestartPrompt()
    		then
    			echo "Tomcat will not be restarted."
    	fi
-   	mainMenu
 }
 
 # The bounceTomcat function checks to see if Tomcat was installed as part of the JSS
@@ -367,14 +368,30 @@ function newcontext()
    					mainMenu
    			fi
 	fi
+	mainMenu
 }
 
-# The mysqlConfig function pulls the server IP address (or just localhost, if the database
-# server is localhost), prompts the user for the root password (if not stored in the script)
-# tests the root password for a proper login, and prompts the user to re-enter the password
-# if incorrect.
+# The createDatabase function creates a database on the host server
 
-function mysqlConfig()
+function createDatabase()
+{
+	echo "Creating database $dbName..."
+	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "CREATE DATABASE $dbName;"
+}
+
+# The grantPermissions function grants permission to a user for the specified database
+
+function grantPermissions()
+{
+	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
+	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "GRANT ALL ON $dbName.* TO $dbUser@$serverAddress IDENTIFIED BY '$dbPass';"
+}
+
+# The testDatabase function will first test for the existence of the database using the
+# root credentials, then checks to see if the specified user has permission to access the
+# database, offering to create the database and grant permissions as needed.
+
+function testDatabase()
 {
 	if [ $dbHost == "localhost" ];
 		then
@@ -382,10 +399,10 @@ function mysqlConfig()
 		else
 			serverAddress=`ifconfig $eth | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}'`
 	fi
-
-	if [ $mysqlRootPwd == "" ];
+	
+	if [ -z "$mysqlRootPwd" ];
 		then
-			read -s -p "MySQL root password:" mysqlRootPwd
+			read -s -p "Enter MySQL root password: " mysqlRootPwd
 	fi
 	
 	echo "Testing MySQL root username and password..."
@@ -397,60 +414,42 @@ function mysqlConfig()
 			read -p "MySQL Root User: " dbRoot
 			read -s -p "MySQL Root Password: " mysqlRootPwd
 		done
-}
-
-# The createDatabase function creates a database on the host server
-
-function createDatabase()
-{
-	echo "Creating database $dbName..."
-	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd CREATE DATABASE $dbName;
-}
-
-# The grantPermissions function grants permission to a user for the specified database
-
-function grantPermissions()
-{
-	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
-	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd GRANT ALL ON $dbName.* TO $dbName@$serverAddress IDENTIFIED BY '$dbPass';
-}
-
-# The testDatabase function will first test for the existence of the database using the
-# root credentials, then checks to see if the specified user has permission to access the
-# database, offering to create the database and grant permissions as needed.
-
-function testDatabase()
-{
+	
+	echo
 	echo "Checking database connection settings..."
+	
 	until [[ ! -z "`mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
 		do
 			echo "Database $dbName does not seem to exist."
 			echo "Would you like to create it?"
 			yesNo
-			if [ yesNo == "yes" ];
+			if [ $yesNo == "yes" ];
 				then
 					createDatabase
-			elif [ yesNo == "no" ];
+					grantPermissions
+			elif [ $yesNo == "no" ];
 				then
 					echo "Database will not be created."
 					mainMenu
 			fi
 		done
 	
-	until [[ ! -z "`mysql -h $dbHost -u $dbuser -p$dbPass -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
+	until [[ ! -z "`mysql -h $dbHost -u $dbUser -p$dbPass -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
 		do
 			echo "User $dbUser does not seem to have permission to access database $dbName."
 			echo "Would you like to grant permissions?"
 			yesNo
-			if [ yesNo == "yes" ];
+			if [ $yesNo == "yes" ];
 				then
 					grantPermissions
-			elif [ yesNo == "no" ];
+			elif [ $yesNo == "no" ];
 				then
 					echo "User will not be granted permission."
 					mainMenu
 			fi
 		done
+		
+		echo "Database connection test successful"
 }
 
 # Check to make sure script is being run as root
