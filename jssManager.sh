@@ -6,9 +6,9 @@
 
 #	The latest version of this script can be found at https://github.com/jkitzmiller/jssmanager
 
-#	Version 8.7b3 - 6/18/2013
+#	Version 9b3 - 8/5/2013
 
-#	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 8.7
+#	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 9.0rc3
 
 #	This script assumes Tomcat7 and MySQL client are installed
 
@@ -121,10 +121,10 @@ function readDatabaseSettings()
 {
 	echo "Reading database connection settings..."
 	
-	dbHost=$(sed -n 's|<ServerName>\(.*\)</ServerName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
-	dbName=$(sed -n 's|<DataBaseName>\(.*\)</DataBaseName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
-	dbUser=$(sed -n 's|<DataBaseUser>\(.*\)</DataBaseUser>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
-	dbPass=$(sed -n 's|<DataBasePassword>\(.*\)</DataBasePassword>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbHost=$(sed -n 's|\s*<ServerName>\(.*\)</ServerName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbName=$(sed -n 's|\s*<DataBaseName>\(.*\)</DataBaseName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbUser=$(sed -n 's|\s*<DataBaseUser>\(.*\)</DataBaseUser>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	dbPass=$(sed -n 's|\s*<DataBasePassword>\(.*\)</DataBasePassword>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
 }
 
 # The touchLogFiles function first checks for the existance of the directory specified
@@ -195,7 +195,7 @@ function deployWebapp()
 	counter=0
 	while [ $counter -lt 12 ];
 		do
-			if [[ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ]];
+			if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
 				then
 					echo "Waiting for Tomcat webapp to deploy..."
 					sleep 5
@@ -205,7 +205,7 @@ function deployWebapp()
 			fi
 	done
 	
-	if [[ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties" && ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ]];
+	if [ ! -f "$tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml" ];
 		then
 			echo Something is wrong...
 			echo Tomcat webapp has not deployed.
@@ -219,8 +219,16 @@ function deployWebapp()
 	# Change log4j files to point logs to new log locations
 
 	echo Updating log4j files
-	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties
-	sed "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties
+	if [ -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" ];
+		then
+			sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties
+	fi
+	
+	if [ -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" ];
+		then
+			sed "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties
+	fi
+	
 	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties
 
 	# Add database connection info to JSS context
@@ -230,7 +238,11 @@ function deployWebapp()
 }
 
 # The updateWebapp function asks the user for the name of the context, validates it, then
-# uses the readDatabaseSettings function to 
+# uses the readDatabaseSettings function to pull the existing database connection settings
+# and store them, then tests the settings to ensure authentication to the database, then
+# it will verify the log files exist and create them if not, then it will delete the exsting
+# webapp, then deploy the new webapp, and finally it prompt for a tomcat restart.
+
 function updateWebapp()
 {
 	echo "Please enter the name of the context you would like to update."
@@ -262,7 +274,50 @@ function updateWebapp()
 	mainMenu
 }
 
+# The updateAll function will update ALL existing contexts in the Tomcat webapp directory
+# and restart tomcat once all contexts have been updated.
 
+function updateAll()
+{
+	echo "All existing JSS contexts will be updated."
+	echo "Are you sure you want to continue?"
+	yesNo
+	if [ $yesNo == "yes" ];
+		then
+			for dirs in $tomcatPath/webapps/*/
+				do
+					contextName="$(basename $dirs)"
+					echo
+					echo "Updating $contextName..."
+					readDatabaseSettings
+					touchLogFiles
+		   			deleteWebapp
+		   			deployWebapp
+				done
+			bounceTomcat
+	fi
+	
+	mainMenu
+}
+
+# The displayAll function is used to display a list of all JSS contexts
+
+function displayAll()
+{
+	echo "Existing JSS contexts:"
+	echo
+	for dirs in $tomcatPath/webapps/*/
+		do
+			contextName="$(basename $dirs)"
+			echo "$contextName"
+		done
+	echo
+	echo	
+	read -s -p "Press [Enter] to reurn to the main menu"
+	mainMenu
+}
+
+# The tomcatRestartPrompt will ask the user if they want to restart tomcat.
 
 function tomcatRestartPrompt()
 {
@@ -417,39 +472,45 @@ function testDatabase()
 	
 	echo
 	echo "Checking database connection settings..."
+
+	dbTestUser=`mysqlshow --host=$dbHost --user=$dbUser --password=$dbPass $dbName| grep -v Wildcard | grep -o $dbName`
+	echo "dbTestUser result: $dbTestUser"
 	
-	until [[ ! -z "`mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
-		do
-			echo "Database $dbName does not seem to exist."
-			echo "Would you like to create it?"
-			yesNo
-			if [ $yesNo == "yes" ];
+	if [ -z $dbTestUser ];
+		then
+			dbTestRoot=`mysqlshow --host=$dbHost --user=$dbRoot --password=$mysqlRootPwd $dbName| grep -v Wildcard | grep -o $dbName`
+			echo "dbTestRoot result: $dbTestRoot"
+			if [ -z $dbTestRoot ];
 				then
-					createDatabase
-					grantPermissions
-			elif [ $yesNo == "no" ];
+					echo "Database $dbName does not seem to exist."
+					echo "Would you like to create it?"
+					yesNo
+						if [ $yesNo == "yes" ];
+							then
+								createDatabase
+								grantPermissions
+						elif [ $yesNo == "no" ];
+							then
+								echo "Database will not be created."
+								echo "WARNING: Webapp may not be able to connect to database."
+						fi
+			elif [ $dbTestRoot == $dbName ];
 				then
-					echo "Database will not be created."
-					mainMenu
+					echo "User $dbUser does not seem to have permission to access database $dbName."
+					echo "Would you like to grant permissions?"
+					yesNo
+						if [ $yesNo == "yes" ];
+							then
+								grantPermissions
+						elif [ $yesNo == "no" ];
+							then
+								echo "User will not be granted permission."
+								echo "WARNING: Webapp may not be able to connect to database."
+						fi
 			fi
-		done
-	
-	until [[ ! -z "`mysql -h $dbHost -u $dbUser -p$dbPass -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='$dbName'" 2>&1`" ]];
-		do
-			echo "User $dbUser does not seem to have permission to access database $dbName."
-			echo "Would you like to grant permissions?"
-			yesNo
-			if [ $yesNo == "yes" ];
-				then
-					grantPermissions
-			elif [ $yesNo == "no" ];
-				then
-					echo "User will not be granted permission."
-					mainMenu
-			fi
-		done
-		
-		echo "Database connection test successful"
+		else
+			echo "Database connection test successful."
+	fi	
 }
 
 # Check to make sure script is being run as root
@@ -520,15 +581,15 @@ function mainMenu()
 {
 			echo
 			echo
-			echo "Welcome to the JSS Manager!"
-			echo
 			echo "What would you like to do?"
 			echo
 			echo "1 Deploy a new JSS context"
 			echo "2 Upgrade an existing JSS context"
-			echo "3 Delete an existing JSS context"
-			echo "4 Restart Tomcat"
-			echo "5 Exit"
+			echo "3 Upgrade ALL JSS contexts"
+			echo "4 Delete an existing JSS context"
+			echo "5 Display all JSS contexts"
+			echo "6 Restart Tomcat"
+			echo "7 Exit"
 			echo
 
 			installType=""
@@ -541,12 +602,18 @@ function mainMenu()
 		   		2)    echo Upgrading an existing JSS...;
 		   				updateWebapp;;
 		   				
-		   		3)    echo Deleting an existing JSS...;
+		   		3)	  echo Upgrading ALL JSS contexts...;
+		   				updateAll;;
+		   				
+		   		4)    echo Deleting an existing JSS...;
 		   				deleteMenu;;
 		   				
-		   		4)	  bounceTomcat;;
+		   		5)	  displayAll;;
+		   				
+		   		6)	  bounceTomcat;
+		   				mainMenu;;
 		   		
-		   		5)	  echo Exiting...;
+		   		7)	  echo Exiting...;
 		   				sleep 3;
 		   		 		exit 0;;
 		   		 		
@@ -560,12 +627,16 @@ function mainMenu()
 
 	clear
 	
-	echo "JSS Manager v8.7b2"
+	echo "JSS Manager v9b3"
 	
 	checkRoot
 
 	checkWebapp
 	
 	checkTomcat
+	
+	echo
+	echo
+	echo "Welcome to the JSS Manager!"
 	
 	mainMenu
