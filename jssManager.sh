@@ -6,7 +6,7 @@
 
 #	The latest version of this script can be found at https://github.com/jkitzmiller/jssmanager
 
-#	Version 9b3 - 8/5/2013
+#	Version 9b4 - 8/7/2013
 
 #	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 9.0rc3
 
@@ -634,7 +634,7 @@ function mainMenu()
 
 	clear
 	
-	echo "JSS Manager v9b3"
+	echo "JSS Manager v9b4"
 	
 	checkRoot
 
