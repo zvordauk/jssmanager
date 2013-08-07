@@ -261,11 +261,7 @@ function updateWebapp()
 			if [ $yesNo == "yes" ];
 				then
 					echo "Updating $contextName..."
-						readDatabaseSettings
-						testDatabase
-		   				touchLogFiles
-		   				deleteWebapp
-		   				deployWebapp
+						updateContext
 		   				tomcatRestartPrompt
 				else
 					echo "$contextName will not be updated."
@@ -289,14 +285,10 @@ function updateAll()
 					contextName="$(basename $dirs)"
 					echo
 					echo "Updating $contextName..."
-					readDatabaseSettings
-					touchLogFiles
-		   			deleteWebapp
-		   			deployWebapp
+					updateContext
 				done
 			bounceTomcat
 	fi
-	
 	mainMenu
 }
 
@@ -350,6 +342,15 @@ function bounceTomcat()
 	fi
 }
 
+function updateContext()
+{
+	readDatabaseSettings
+	testDatabase
+	touchLogFiles
+	deleteWebapp
+	deployWebapp
+}
+
 # The newcontext function gets the context name and database connection information
 # from the user, and deploys a new context. If the user enters an context name
 # that is already in use, the script will prompt to upgrade the context instead.
@@ -369,11 +370,8 @@ function newcontext()
 				if [ $yesNo == "yes" ];
 					then
 						echo "Updating $contextName..."
-							readDatabaseSettings
-		   					touchLogFiles
-		   					deleteWebapp
-		   					deployWebapp
-		   					tomcatRestartPrompt
+						updateContext
+						tomcatRestartPrompt
 		   		elif [ $yesNo == "no" ];
 		   			then
 		   				echo "Aborting deployment."
@@ -416,6 +414,7 @@ function newcontext()
 					touchLogFiles
 					deployWebapp
 					tomcatRestartPrompt
+					setChangeManagement
    			elif [ $yesNo == "no" ];
    				then
    					echo "Context will not be created."
@@ -440,6 +439,14 @@ function grantPermissions()
 {
 	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
 	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "GRANT ALL ON $dbName.* TO $dbUser@$serverAddress IDENTIFIED BY '$dbPass';"
+}
+
+function setChangeManagement()
+{
+echo "Setting change management log path to $logPath/$contextName"
+mysql --host=$dbHost --user=$dbUser --password=$dbPass $dbName << EOF
+insert into change_management (cm_file) values('$logPath/$contextName');
+EOF
 }
 
 # The testDatabase function will first test for the existence of the database using the
