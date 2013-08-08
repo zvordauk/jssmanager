@@ -1,18 +1,58 @@
-#! /bin/bash
-
-#	Multi-context JSS management script by John Kitzmiller
-
-#	http://www.johnkitzmiller.com
-
-#	The latest version of this script can be found at https://github.com/jkitzmiller/jssmanager
-
-#	Version 9b4 - 8/7/2013
-
-#	Tested on Ubuntu 12.04 LTS with Tomcat 7 and Casper Suite v. 9.0rc3
-
-#	This script assumes Tomcat7 and MySQL client are installed
-
-#	This script should be run as root
+#!/bin/bash 
+#
+##########################################################################################
+#
+# Copyright (c) 2013, John Kitzmiller.  All rights reserved.
+#
+#       THIS SOFTWARE IS PROVIDED BY John Kitzmiller "AS IS" AND ANY
+#       EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+#       WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#       DISCLAIMED. IN NO EVENT SHALL John Kitzmiller, LLC BE LIABLE FOR ANY
+#       DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+#       (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+#       LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#       ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+#       SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+##########################################################################################
+#
+# SUPPORT FOR THIS PROGRAM
+#
+#       This program is distributed "as is" by John Kitzmiller.
+#		Please visit http://www.johnkitzmiller.com/contact for support.
+#
+##########################################################################################
+#
+# ABOUT THIS PROGRAM
+#
+# NAME
+#	jssManager.sh
+#
+# SYNOPSIS - How to use
+#	
+# Place a copy of your ROOT.war file in the path specified in the webapp variable below
+# Run the script as root
+# 
+# DESCRIPTION
+# 	
+# A multi-context deployment and management script for running the JSS on Linux
+# This script is tested on Ubuntu 12.04 LTS using Tomcat 7, MySQL 5.5 and JSS 9.0rc3
+#
+# PREREQUISITES
+#
+# Tomcat 7
+# MySQL Server 5.5 or later (or client, if your MySQL server is a remote host)
+# 
+##########################################################################################
+#
+# HISTORY
+#
+#	Version: 9b5
+#
+#	- Created by John Kitzmiller on August 8 2013
+#
+##########################################################################################
 
 ##########################################################################################
 ############### Edit the following variables to suit your environment ####################
@@ -34,7 +74,12 @@
 	
 	# Path to dump MySQL database (do not leave a trailing / at the end of your path)
 	
-	dbDump="/tmp"
+	dbDumpPath="/usr/local/jssmanager/backups"
+	
+	# Set dbDump to "yes" to always dump the database without asking
+	# Set dbDump to "no" to never dump the database without asking
+	
+	dbDump=""
 	
 	# Path where you store your JSS logs (do not leave a trailing / at the end of your path)
 	
@@ -275,6 +320,7 @@ function updateWebapp()
 
 function updateAll()
 {
+	dbDumpPrompt
 	echo "All existing JSS contexts will be updated."
 	echo "Are you sure you want to continue?"
 	yesNo
@@ -346,6 +392,10 @@ function updateContext()
 {
 	readDatabaseSettings
 	testDatabase
+	if [ $dbDump == "yes" ];
+		then
+			dumpDatabase
+	fi
 	touchLogFiles
 	deleteWebapp
 	deployWebapp
@@ -449,6 +499,19 @@ insert into change_management (cm_file) values('$logPath/$contextName');
 EOF
 }
 
+function testMysqlRoot()
+{
+	echo "Testing MySQL root username and password..."
+	# The following could potentially cause an infinite loop if a successful connection
+	# to the database host can not be established
+	until mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd  -e ";" ;
+		do
+			echo "Invalid MySQL root username or password. Please retry."
+			read -p "MySQL Root User: " dbRoot
+			read -s -p "MySQL Root Password: " mysqlRootPwd
+		done
+}
+
 # The testDatabase function will first test for the existence of the database using the
 # root credentials, then checks to see if the specified user has permission to access the
 # database, offering to create the database and grant permissions as needed.
@@ -467,26 +530,16 @@ function testDatabase()
 			read -s -p "Enter MySQL root password: " mysqlRootPwd
 	fi
 	
-	echo "Testing MySQL root username and password..."
-	# The following could potentially cause an infinite loop if a successful connection
-	# to the database host can not be established
-	until mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd  -e ";" ;
-		do
-			echo "Invalid MySQL root username or password. Please retry."
-			read -p "MySQL Root User: " dbRoot
-			read -s -p "MySQL Root Password: " mysqlRootPwd
-		done
+	testMysqlRoot
 	
 	echo
 	echo "Checking database connection settings..."
 
 	dbTestUser=`mysqlshow --host=$dbHost --user=$dbUser --password=$dbPass $dbName| grep -v Wildcard | grep -o $dbName`
-	echo "dbTestUser result: $dbTestUser"
 	
 	if [ -z $dbTestUser ];
 		then
 			dbTestRoot=`mysqlshow --host=$dbHost --user=$dbRoot --password=$mysqlRootPwd $dbName| grep -v Wildcard | grep -o $dbName`
-			echo "dbTestRoot result: $dbTestRoot"
 			if [ -z $dbTestRoot ];
 				then
 					echo "Database $dbName does not seem to exist."
@@ -519,6 +572,48 @@ function testDatabase()
 			echo "Database connection test successful."
 	fi	
 }
+
+function dumpDatabase()
+{
+	if [ -z "$mysqlRootPwd" ];
+		then
+			read -s -p "Enter MySQL root password: " mysqlRootPwd
+	fi
+	
+	testMysqlRoot
+	
+	dbTestRoot=`mysqlshow --host=$dbHost --user=$dbRoot --password=$mysqlRootPwd $dbName| grep -v Wildcard | grep -o $dbName`
+	if [ -z $dbTestRoot ];
+		then
+			echo "WARNING: Database $dbName does not appear to exist!"
+		else
+			if [ ! -d "$dbDumpPath/$dbName" ];
+				then
+					echo "Creating $dbDumpPath/$dbName"
+					mkdir -p $dbDumpPath/$dbName
+			fi
+	
+			NOW="$(date +"%Y-%m-%d-%H-%M")"
+			echo "Dumping database $dbName to $dbDumpPath"
+			mysqldump -h $dbHost -u $dbRoot -p$mysqlRootPwd $dbName > $dbDumpPath/$dbName/$NOW.$dbName.sql
+	fi
+}
+
+function dbDumpPrompt()
+{
+	if [ $dbDump != "no" ] && [ $dbDump != "yes" ];
+		then
+			echo "Would you like to backup the database(s) before proceeding?"
+			yesNo
+			if [ $yesNo == "yes" ];
+				then
+					dbDump="yes"
+			elif [ $yesNo == "no" ];
+				then
+					dbDump="no"
+			fi
+	fi
+}	
 
 # Check to make sure script is being run as root
 
@@ -634,7 +729,7 @@ function mainMenu()
 
 	clear
 	
-	echo "JSS Manager v9b4"
+	echo "JSS Manager v9b5"
 	
 	checkRoot
 
