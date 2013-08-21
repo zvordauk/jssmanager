@@ -48,9 +48,9 @@
 #
 # HISTORY
 #
-#	Version: 9b5
+#	Version: 9.0
 #
-#	- Created by John Kitzmiller on August 8 2013
+#	- Created by John Kitzmiller on August 21 2013
 #
 ##########################################################################################
 
@@ -78,8 +78,9 @@
 	
 	# Set dbDump to "yes" to always dump the database without asking
 	# Set dbDump to "no" to never dump the database without asking
+	# Set dbDump to "prompt" to always be asked if you want to dump the database
 	
-	dbDump=""
+	dbDump="prompt"
 	
 	# Path where you store your JSS logs (do not leave a trailing / at the end of your path)
 	
@@ -464,7 +465,6 @@ function newcontext()
 					touchLogFiles
 					deployWebapp
 					tomcatRestartPrompt
-					setChangeManagement
    			elif [ $yesNo == "no" ];
    				then
    					echo "Context will not be created."
@@ -489,14 +489,6 @@ function grantPermissions()
 {
 	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
 	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "GRANT ALL ON $dbName.* TO $dbUser@$serverAddress IDENTIFIED BY '$dbPass';"
-}
-
-function setChangeManagement()
-{
-echo "Setting change management log path to $logPath/$contextName"
-mysql --host=$dbHost --user=$dbUser --password=$dbPass $dbName << EOF
-insert into change_management (cm_file) values('$logPath/$contextName');
-EOF
 }
 
 function testMysqlRoot()
@@ -729,7 +721,7 @@ function mainMenu()
 
 	clear
 	
-	echo "JSS Manager v9b5"
+	echo "JSS Manager v9.0"
 	
 	checkRoot
 
