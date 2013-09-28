@@ -48,9 +48,15 @@
 #
 # HISTORY
 #
+#	Version 9.1
+#
+#		September 27th 2013
+#		- Updated to include more advanced error checking
+#		- Added logging
+#
 #	Version: 9.0
 #
-#	- Created by John Kitzmiller on August 21 2013
+#		- Created by John Kitzmiller on August 21 2013
 #
 ##########################################################################################
 
@@ -95,6 +101,10 @@
 	# In most setups, this won't have to be changed
 	
 	eth="eth0"
+	
+	# Log file
+	
+	logfile="/var/log/jssmanager.log"
 	
 ########### It is not recommended that you make any changes after this line ##############
 
@@ -153,10 +163,21 @@ function deleteMenu()
 
 function deleteWebapp()
 {
-	echo "Deleting $tomcatPath/webapps/$contextName.war"
 	rm -rf $tomcatPath/webapps/$contextName.war
-	echo "Deleting $tomcatPath/webapps/$contextName"
+	if [ "$?" == "0" ];
+		then
+			echo "Deleted $tomcatPath/webapps/$contextName.war"
+		else
+			echo "Unable to delete $tomcatPath/webapps/$contextName.war"
+	fi
+
 	rm -rf $tomcatPath/webapps/$contextName
+	if [ "$?" == "0" ];
+		then
+			echo "Deleted $tomcatPath/webapps/$contextName"
+		else
+			echo "Unable to delete $tomcatPath/webapps/$contextName"
+	fi
 }
 
 # The readDatabaseSettings function reads the DataBase.xml file for the specified context
@@ -167,10 +188,55 @@ function readDatabaseSettings()
 {
 	echo "Reading database connection settings..."
 	
+	dbHost=""
+	dbName=""
+	dbUser=""
+	dbPass=""
+	
 	dbHost=$(sed -n 's|\s*<ServerName>\(.*\)</ServerName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	if [ "$?" == "0" ];
+		then
+			echo "Database host is $dbHost"
+		else
+			echo "Unable to retrieve database host"
+	fi
 	dbName=$(sed -n 's|\s*<DataBaseName>\(.*\)</DataBaseName>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	if [ "$?" == "0" ];
+		then
+			echo "Database name is $dbName"
+		else
+			echo "Unable to retrieve database name"
+	fi
 	dbUser=$(sed -n 's|\s*<DataBaseUser>\(.*\)</DataBaseUser>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	if [ "$?" == "0" ];
+		then
+			echo "Database user is $dbUser"
+		else
+			echo "Unable to retrieve database user"
+	fi
 	dbPass=$(sed -n 's|\s*<DataBasePassword>\(.*\)</DataBasePassword>|\1|p' $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml)
+	if [ "$?" == "0" ];
+		then
+			echo "Database password is $dbPass"
+		else
+			echo "Unable to retrieve database password"
+	fi
+	
+	if [ -z $dbHost ] || [ -z $dbName ] || [ -z $dbUser ] || [ -z $dbPass ];
+		then
+			echo
+			echo
+			echo "Unable to retrieve database settings"
+			echo "Updated webapp will be unable to connect to the database"
+			echo "Do you want to continue?"
+			yesNo
+			if [ $yesNo == "yes" ];
+				then
+					echo "Continuing update without database connection information"
+				else
+					mainMenu
+			fi
+	fi
 }
 
 # The touchLogFiles function first checks for the existance of the directory specified
@@ -190,6 +256,12 @@ function touchLogFiles()
 				then
 					echo Creating $logPath
 					mkdir -p $logPath
+					if [ "$?" == "0" ];
+						then
+							echo "Created $logPath"
+						else
+							echo "Unable to create $logPath"
+					fi
 			elif [ $yesNo == "no" ];
 				then
 					echo
@@ -204,7 +276,17 @@ function touchLogFiles()
 		then
 			echo Creating $logPath/$contextName/
 			mkdir $logPath/$contextName
+			if [ "$?" == "0" ];
+				then
+					echo "Created $logPath/$contextName/"
+				else
+					echo "Error: Unable to create $logPath/$contextName/"
+			fi
 			chown tomcat7:tomcat7 $logPath/$contextName
+			if [ "$?" != "0" ];
+				then
+					echo "Error: unable to change ownership on $logPath/$contextName"
+			fi
 		else
 			echo $logPath/$contextName/ exists
 	fi
@@ -213,7 +295,17 @@ function touchLogFiles()
 		then
 			echo Creating $logPath/$contextName/JAMFSoftwareServer.log
 			touch $logPath/$contextName/JAMFSoftwareServer.log
+			if [ "$?" == "0" ];
+				then
+					echo "Created JAMFSoftwareServer.log in $logPath/$contextName/"
+				else
+					echo "Error: Unable to create JAMFSoftwareServer.log in $logPath/$contextName/"
+			fi
 			chown tomcat7:tomcat7 $logPath/$contextName/JAMFSoftwareServer.log
+			if [ "$?" != "0" ];
+				then
+					echo "Error: Unable to change ownership on JAMFSoftwareServer.log in $logPath/$contextName/"
+			fi
 		else
 			echo $logPath/$contextName/JAMFSoftwareServer.log exists
 	fi
@@ -222,7 +314,17 @@ function touchLogFiles()
 		then
 			echo Creating $logPath/$contextName/jamfChangeManagement.log
 			touch $logPath/$contextName/jamfChangeManagement.log
+			if [ "$?" == "0" ];
+				then
+					echo "Created jamfChangeManagement.log in $logPath/$contextName/"
+				else
+					echo "Error: Unable to create jamfChangeManagement.log in $logPath/$contextName/"
+			fi
 			chown tomcat7:tomcat7 $logPath/$contextName/jamfChangeManagement.log
+			if [ "$?" != "0" ];
+				then
+					echo "Error: Unable to change ownership on jamfChangeManagement.log in $logPath/$contextName/"
+			fi
 		else
 			echo $logPath/$contextName/jamfChangeManagement.log exists
 	fi
@@ -235,6 +337,10 @@ function deployWebapp()
 {
 	echo Deploying Tomcat webapp
 	cp $webapp $tomcatPath/webapps/$contextName.war
+	if [ "$?" != "0" ];
+		then
+			echo "Error: unable to copy $webapp to $tomcatPath/webapps/"
+	fi
 	
 	# Sleep timer to allow tomcat app to deploy
 
@@ -257,7 +363,7 @@ function deployWebapp()
 			echo Tomcat webapp has not deployed.
 			echo Aborting!
 			sleep 1
-			exit 1
+			mainMenu
 		else
 			echo Webapp has deployed.
 	fi
@@ -268,19 +374,34 @@ function deployWebapp()
 	if [ -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties" ];
 		then
 			sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMFILE.properties
+			if [ "$?" != "0" ];
+				then
+					echo "Error: Unable to write settings to log4j.JAMFCMFILE.properties"
+			fi
 	fi
 	
 	if [ -f "$tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties" ];
 		then
 			sed "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.JAMFCMSYSLOG.properties
+			if [ "$?" != "0" ];
+				then
+					echo "Error: Unable to write settings to log4j.JAMFCMSYSLOG.properties"
+			fi
 	fi
 	
 	sed -e "s@log4j.appender.JAMFCMFILE.File=.*@log4j.appender.JAMFCMFILE.File=$logPath/$contextName/jamfChangeManagement.log@" -e "s@log4j.appender.JAMF.File=.*@log4j.appender.JAMF.File=$logPath/$contextName/JAMFSoftwareServer.log@" -i $tomcatPath/webapps/$contextName/WEB-INF/classes/log4j.properties
-
+	if [ "$?" != "0" ];
+		then
+			echo "Error: Unable to write settings to log4j.properties"
+	fi
 	# Add database connection info to JSS context
 
 	echo Writing database connection settings
 	sed -e "s@<ServerName>.*@<ServerName>$dbHost</ServerName>@" -e "s@<DataBaseName>.*@<DataBaseName>$dbName</DataBaseName>@" -e "s@<DataBaseUser>.*@<DataBaseUser>$dbUser</DataBaseUser>@" -e "s@<DataBasePassword>.*@<DataBasePassword>$dbPass</DataBasePassword>@" -i $tomcatPath/webapps/$contextName/WEB-INF/xml/DataBase.xml
+	if [ "$?" != "0" ];
+		then
+			echo "Error: Unable to write settings to DataBase.xml"
+	fi
 }
 
 # The updateWebapp function asks the user for the name of the context, validates it, then
@@ -316,8 +437,9 @@ function updateWebapp()
 	mainMenu
 }
 
-# The updateAll function will update ALL existing contexts in the Tomcat webapp directory
-# and restart tomcat once all contexts have been updated.
+# The updateAll function will update ALL existing contexts in the Tomcat webapp directory.
+# The automatic Tomcat restart has been removed due to Tomcat restarts causing database
+# corruption when run during database upgrades from 8.7x to 9.0
 
 function updateAll()
 {
@@ -334,7 +456,6 @@ function updateAll()
 					echo "Updating $contextName..."
 					updateContext
 				done
-			bounceTomcat
 	fi
 	mainMenu
 }
@@ -481,6 +602,13 @@ function createDatabase()
 {
 	echo "Creating database $dbName..."
 	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "CREATE DATABASE $dbName;"
+	if [ "$?" == "0" ];
+		then
+			echo "Database $dbName created
+		else
+			echo "Error: Unable to create database $dbName
+	fi
+	
 }
 
 # The grantPermissions function grants permission to a user for the specified database
@@ -489,6 +617,12 @@ function grantPermissions()
 {
 	echo "Granting permissions on database $dbName to user $dbUser at $serverAddress..."
 	mysql -h $dbHost -u $dbRoot -p$mysqlRootPwd -e "GRANT ALL ON $dbName.* TO $dbUser@$serverAddress IDENTIFIED BY '$dbPass';"
+	if [ "$?" == "0" ];
+		then
+			echo "Permissions granted"
+		else
+			echo "Error: Unable to grant permissions"
+	fi
 }
 
 function testMysqlRoot()
@@ -583,11 +717,26 @@ function dumpDatabase()
 				then
 					echo "Creating $dbDumpPath/$dbName"
 					mkdir -p $dbDumpPath/$dbName
+					if [ "$?" != "0" ];
+						then
+							echo "Error: Unable to create $dbDumpPath/$dbName"
+							echo "Aborting!"
+							sleep 1
+							mainMenu
+					fi
 			fi
 	
 			NOW="$(date +"%Y-%m-%d-%H-%M")"
 			echo "Dumping database $dbName to $dbDumpPath"
 			mysqldump -h $dbHost -u $dbRoot -p$mysqlRootPwd $dbName > $dbDumpPath/$dbName/$NOW.$dbName.sql
+			if [ "$?" == "0" ];
+				then
+					echo "Database dump successful"
+				else
+					echo "Error: Unable to dump database"
+					echo "Aborting!"
+					mainMenu
+			fi
 	fi
 }
 
@@ -669,6 +818,15 @@ function checkTomcat()
 	echo "Tomcat path is $tomcatPath"
 }
 
+# The exitPrep function clears variables containing passwords to eliminate a security risk
+# when exiting the script
+
+function exitPrep()
+{
+	mysqlRootPwd=""
+	dbPass=""
+}
+
 # Main menu
 
 function mainMenu()
@@ -708,6 +866,7 @@ function mainMenu()
 		   				mainMenu;;
 		   		
 		   		7)	  echo Exiting...;
+		   				exitPrep;
 		   				sleep 3;
 		   		 		exit 0;;
 		   		 		
@@ -719,9 +878,16 @@ function mainMenu()
 #################################### End functions #######################################
 ##########################################################################################
 
+	if [ ! -f "$logfile" ];
+		then
+			touch $logfile
+	fi
+
+	exec 2>&1 > >(tee $logfile)
+	
 	clear
 	
-	echo "JSS Manager v9.0"
+	echo "JSS Manager v9.1"
 	
 	checkRoot
 
