@@ -37,7 +37,7 @@
 # DESCRIPTION
 # 	
 # A multi-context deployment and management script for running the JSS on Linux
-# This script is tested on Ubuntu 12.04 LTS using Tomcat 7, MySQL 5.5 and JSS 9.0rc3
+# This script is tested on Ubuntu 12.04 LTS using Tomcat 7, MySQL 5.5 and JSS 9.x
 #
 # PREREQUISITES
 #
@@ -47,6 +47,12 @@
 ##########################################################################################
 #
 # HISTORY
+#
+#	Version 9.2b1
+#
+#		October 26th 2013
+#		- Fixed an issue where MySQL testing gets stuck in a loop on context upgrades
+#		- Clears passwords stored in variables on exit
 #
 #	Version 9.1
 #
@@ -102,9 +108,9 @@
 	
 	eth="eth0"
 	
-	# Log file
+	# Path to the log file for the jssmanager
 	
-	logfile="/var/log/jssmanager.log"
+	logLocation="/var/log/"
 	
 ########### It is not recommended that you make any changes after this line ##############
 
@@ -513,7 +519,6 @@ function bounceTomcat()
 function updateContext()
 {
 	readDatabaseSettings
-	testDatabase
 	if [ $dbDump == "yes" ];
 		then
 			dumpDatabase
@@ -823,8 +828,10 @@ function checkTomcat()
 
 function exitPrep()
 {
+	echo "Clearing passwords from variables..."
 	mysqlRootPwd=""
 	dbPass=""
+	echo "Done."
 }
 
 # Main menu
@@ -878,16 +885,23 @@ function mainMenu()
 #################################### End functions #######################################
 ##########################################################################################
 
-	if [ ! -f "$logfile" ];
-		then
-			touch $logfile
-	fi
+	# Trap [Ctrl+C] to clear passwords from variables when forcing exit
+	
+	trap 'exitPrep && exit 5' 2
+	
+	# Create log file
+	
+	NOW="$(date +"%Y-%m-%d-%H-%M")"
+	echo "Creating $logLocation/$NOW.jssmanager.log"
+	touch $logLocation/$NOW.jssmanager.log
+	
+	# Redirect stderr to stdout and print all to log
 
-	exec 2>&1 > >(tee $logfile)
+	exec 2>&1 > >(tee $logLocation/$NOW.jssmanager.log)
 	
 	clear
 	
-	echo "JSS Manager v9.1"
+	echo "JSS Manager v9.2b1"
 	
 	checkRoot
 
