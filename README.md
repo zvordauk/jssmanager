@@ -1,6 +1,6 @@
 jssmanager
 ==========
-The purpose of this script is to automate the installation and management of JAMF's manual installer in a multi-context environment.
+The purpose of this script is to automate the installation and management of JAMF's manual installer in a multi-context (also known as multi-tenancy) environment.
 
 The script is tested using the latest version of the JSS, Ubuntu Server 12.04, Tomcat 7, and MySQL 5.5. Use in other environments at your own risk, and please test this script before using it in your production environments.
 
