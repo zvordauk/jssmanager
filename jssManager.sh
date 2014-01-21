@@ -20,7 +20,7 @@
 # SUPPORT FOR THIS PROGRAM
 #
 #       This program is distributed "as is" by John Kitzmiller.
-#		Please visit http://www.johnkitzmiller.com/contact for support.
+#		Please visit http://kitzy.org/contact for support.
 #
 ##########################################################################################
 #
@@ -47,6 +47,11 @@
 ##########################################################################################
 #
 # HISTORY
+#
+#	Version 9.2b2
+#
+#		January 21st 2014
+#		- Added error checking to make sure Tomcat is running
 #
 #	Version 9.2b1
 #
@@ -823,6 +828,45 @@ function checkTomcat()
 	echo "Tomcat path is $tomcatPath"
 }
 
+# isTomcatRunning function added 1/21/14 by kitzy to assess if Tomcat is running
+# wbapps will not deploy properly if Tomcat is stopped
+
+function isTomcatRunning()
+{
+	kill -0 `cat $CATALINA_PID` > /dev/null 2>&1
+	if [ $? -gt 0 ];
+		then
+			echo "Tomcat does not appear to be running."
+			echo "Would you like to start it?"
+			yesNo
+			if [ $yesNo == "yes" ];
+				then
+					if [ -d "/var/lib/tomcat7" ];
+						then
+							service tomcat7 start
+					elif [ -d "/usr/local/jss/tomcat" ];
+						then
+							/etc/init.d/jamf.tomcat7 start
+					fi
+			elif [ $yesNo == "no" ];
+				then
+					echo "WARING: Webapps will not deploy properly if Tomcat is stopped!"
+					echo "Are you sure you want to continue without starting Tomcat?"
+					yesNo
+					if [ $yesNo == "yes" ];
+						then
+							echo "You've been warned..."
+					elif [ $yesNo == "no" ];
+						then
+							isTomcatRunning
+					fi
+			fi
+		else
+			echo "Tomcat is running."
+	fi
+}
+		
+
 # The exitPrep function clears variables containing passwords to eliminate a security risk
 # when exiting the script
 
@@ -901,13 +945,15 @@ function mainMenu()
 	
 	clear
 	
-	echo "JSS Manager v9.2b1"
+	echo "JSS Manager v9.2b2"
 	
 	checkRoot
 
 	checkWebapp
 	
 	checkTomcat
+	
+	isTomcatRunning
 	
 	echo
 	echo
