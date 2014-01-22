@@ -45,31 +45,7 @@
 # MySQL Server 5.5 or later (or client, if your MySQL server is a remote host)
 # 
 ##########################################################################################
-#
-# HISTORY
-#
-#	Version 9.2b2
-#
-#		January 21st 2014
-#		- Added error checking to make sure Tomcat is running
-#
-#	Version 9.2b1
-#
-#		October 26th 2013
-#		- Fixed an issue where MySQL testing gets stuck in a loop on context upgrades
-#		- Clears passwords stored in variables on exit
-#
-#	Version 9.1
-#
-#		September 27th 2013
-#		- Updated to include more advanced error checking
-#		- Added logging
-#
-#	Version: 9.0
-#
-#		- Created by John Kitzmiller on August 21 2013
-#
-##########################################################################################
+
 
 ##########################################################################################
 ############### Edit the following variables to suit your environment ####################
@@ -488,39 +464,6 @@ function displayAll()
 	mainMenu
 }
 
-# The tomcatRestartPrompt will ask the user if they want to restart tomcat.
-
-function tomcatRestartPrompt()
-{
-	echo
-	echo "A Tomcat restart is recommended."
-	echo "Would you like to restart Tomcat now?"
-	yesNo
-	if [ $yesNo == "yes" ];
-		then
-   			bounceTomcat
-   	elif [ $yesNo == "no" ];
-   		then
-   			echo "Tomcat will not be restarted."
-   	fi
-}
-
-# The bounceTomcat function checks to see if Tomcat was installed as part of the JSS
-# installer, or if Tomcat was installed manually, and sends the appropriate restart command.
-
-function bounceTomcat()
-{
-	echo "Restarting Tomcat..."
-	
-	if [ -d "/var/lib/tomcat7" ];
-		then
-			service tomcat7 restart
-	elif [ -d "/usr/local/jss/tomcat" ];
-		then
-			/etc/init.d/jamf.tomcat7 restart
-	fi
-}
-
 function updateContext()
 {
 	readDatabaseSettings
@@ -828,42 +771,97 @@ function checkTomcat()
 	echo "Tomcat path is $tomcatPath"
 }
 
+# The tomcatRestartPrompt will ask the user if they want to restart tomcat.
+
+function tomcatRestartPrompt()
+{
+	echo
+	echo "A Tomcat restart is recommended."
+	echo "Would you like to restart Tomcat now?"
+	yesNo
+	if [ $yesNo == "yes" ];
+		then
+   			bounceTomcat
+   	elif [ $yesNo == "no" ];
+   		then
+   			echo "Tomcat will not be restarted."
+   	fi
+}
+
+# The bounceTomcat function checks to see if Tomcat was installed as part of the JSS
+# installer, or if Tomcat was installed manually, and sends the appropriate restart command.
+
+function bounceTomcat()
+{
+	echo "Restarting Tomcat..."
+	
+	if [ -d "/var/lib/tomcat7" ];
+		then
+			service tomcat7 restart
+	elif [ -d "/usr/local/jss/tomcat" ];
+		then
+			/etc/init.d/jamf.tomcat7 restart
+	fi
+}
+
+
+# Starts Tomcat
+
+function startTomcat()
+{
+	if [ -d "/var/lib/tomcat7" ];
+    	then
+            service tomcat7 start
+    elif [ -d "/usr/local/jss/tomcat" ];
+    	then
+            /etc/init.d/jamf.tomcat7 start
+    fi
+}
+
+# Stops Tomcat
+
+function stopTomcat()
+{
+	if [ -d "/var/lib/tomcat7" ];
+    	then
+            service tomcat7 stop
+    elif [ -d "/usr/local/jss/tomcat" ];
+        	then
+            	/etc/init.d/jamf.tomcat7 stop
+    fi
+}
+
+
 # isTomcatRunning function added 1/21/14 by kitzy to assess if Tomcat is running
 # wbapps will not deploy properly if Tomcat is stopped
 
 function isTomcatRunning()
 {
-	kill -0 `cat $CATALINA_PID` > /dev/null 2>&1
-	if [ $? -gt 0 ];
-		then
-			echo "Tomcat does not appear to be running."
-			echo "Would you like to start it?"
-			yesNo
-			if [ $yesNo == "yes" ];
-				then
-					if [ -d "/var/lib/tomcat7" ];
-						then
-							service tomcat7 start
-					elif [ -d "/usr/local/jss/tomcat" ];
-						then
-							/etc/init.d/jamf.tomcat7 start
-					fi
-			elif [ $yesNo == "no" ];
-				then
-					echo "WARING: Webapps will not deploy properly if Tomcat is stopped!"
-					echo "Are you sure you want to continue without starting Tomcat?"
-					yesNo
-					if [ $yesNo == "yes" ];
-						then
-							echo "You've been warned..."
-					elif [ $yesNo == "no" ];
-						then
-							isTomcatRunning
-					fi
-			fi
-		else
-			echo "Tomcat is running."
-	fi
+    tomcatPID=`ps auxw | grep "${tomcatPath}" | grep -v grep | awk '{print $2}'`
+    if [ -z $tomcatPID ];
+        then
+            echo "Tomcat does not appear to be running."
+            echo "Would you like to start it?"
+            yesNo
+            if [ $yesNo == "yes" ];
+                then
+                	startTomcat
+            elif [ $yesNo == "no" ];
+                then
+                    echo "WARING: Webapps will not deploy properly if Tomcat is stopped!"
+                    echo "Are you sure you want to continue without starting Tomcat?"
+                    yesNo
+                    if [ $yesNo == "yes" ];
+                    	then
+                            echo "You've been warned..."
+                    elif [ $yesNo == "no" ];
+                        then
+                            isTomcatRunning
+                    fi
+            fi
+    else
+        echo "Tomcat is running."
+    fi
 }
 		
 
@@ -876,6 +874,7 @@ function exitPrep()
 	mysqlRootPwd=""
 	dbPass=""
 	echo "Done."
+	exit 0
 }
 
 # Main menu
@@ -892,6 +891,8 @@ function mainMenu()
 			echo "4 Delete an existing JSS context"
 			echo "5 Display all JSS contexts"
 			echo "6 Restart Tomcat"
+			echo "7 Start Tomcat"
+			echo "8 Stop Tomcat"
 			echo "7 Exit"
 			echo
 
@@ -915,11 +916,15 @@ function mainMenu()
 		   				
 		   		6)	  bounceTomcat;
 		   				mainMenu;;
+		   				
+		   		7)	  stopTomcat;
+		   				mainMenu;;
+		   				
+		   		8)	  startTomcat;
+		   				mainMenu;;
 		   		
-		   		7)	  echo Exiting...;
-		   				exitPrep;
-		   				sleep 3;
-		   		 		exit 0;;
+		   		9)	  echo Exiting...;
+		   				exitPrep;;
 		   		 		
 				*)    echo Invalid Selection!;;
 			esac
@@ -945,7 +950,7 @@ function mainMenu()
 	
 	clear
 	
-	echo "JSS Manager v9.2b2"
+	echo "JSS Manager v9.2b3"
 	
 	checkRoot
 
